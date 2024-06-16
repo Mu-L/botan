@@ -216,6 +216,25 @@ class Pcurve_Arithmetic_Tests final : public Test {
                }
             }
 
+            // Test mul2 with two small scalars
+            for(size_t i = 0; i != 16; ++i) {
+               const auto pt1 = curve->mul_by_g(curve->random_scalar(rng), rng).to_affine();
+               const auto pt2 = curve->mul_by_g(curve->random_scalar(rng), rng).to_affine();
+
+               const auto s1 = curve->scalar_from_u32(i % 16);
+               const auto s2 = curve->scalar_from_u32(i % 16).negate();
+
+               const auto mul2_table = curve->mul2_setup(pt1, pt2);
+
+               const auto ref = (curve->mul(pt1, s1, rng) + curve->mul(pt2, s2, rng)).to_affine();
+
+               if(auto mul2pt = curve->mul2_vartime(*mul2_table, s1, s2)) {
+                  result.test_eq("ref == mul2t", ref.serialize(), mul2pt->to_affine().serialize());
+               } else {
+                  result.confirm("ref is identity", ref.is_identity());
+               }
+            }
+
             // Test cases where the two points have a linear relation
             for(size_t i = 0; i != 16; ++i) {
                const auto pt1 = curve->generator();
