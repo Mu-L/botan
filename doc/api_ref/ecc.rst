@@ -181,7 +181,7 @@ Only curves over prime fields are supported.
 
        Return a random non-zero scalar value
 
-   .. cpp:function:: static EC_Scalar gk_x_mod_order(const EC_Scalar& scalar, RandomNumberGenerator& rng, std::vector<BigInt>& ws)
+   .. cpp:function:: static EC_Scalar gk_x_mod_order(const EC_Scalar& scalar, RandomNumberGenerator& rng)
 
        Compute the elliptic curve scalar multiplication (g*k) where g is the
        standard base point on the curve. Then extract the x coordinate of the
@@ -247,7 +247,7 @@ Only curves over prime fields are supported.
 
       This accepts SEC1 compressed or uncompressed formats
 
-   .. cpp:function::  static EC_AffinePoint g_mul(const EC_Scalar& scalar, RandomNumberGenerator& rng, std::vector<BigInt>& ws)
+   .. cpp:function::  static EC_AffinePoint g_mul(const EC_Scalar& scalar, RandomNumberGenerator& rng)
 
       Fixed base scalar multiplication. Constant time with blinding.
 
@@ -260,7 +260,7 @@ Only curves over prime fields are supported.
       Constant time 2-ary multiscalar multiplication. Returns p*x + q*y, or
       nullopt if the resulting point was the identity element.
 
-   .. cpp:function:: EC_AffinePoint mul(const EC_Scalar& scalar, RandomNumberGenerator& rng, std::vector<BigInt>& ws) const
+   .. cpp:function:: EC_AffinePoint mul(const EC_Scalar& scalar, RandomNumberGenerator& rng) const
 
       Variable base scalar multiplication. Constant time with blinding.
 
