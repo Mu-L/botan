@@ -20,8 +20,6 @@ namespace Botan::PCurve {
 
 namespace {
 
-using GPOC = const GenericPrimeOrderCurve*;
-
 template <size_t N>
 constexpr std::optional<std::array<word, N>> bytes_to_words(std::span<const uint8_t> bytes) {
    if(bytes.size() > WordInfo<word>::bytes * N) {
@@ -193,7 +191,7 @@ class GenericCurveParams final {
       bool order_is_less_than_field() const { return m_order_is_lt_field; }
 
       void mul(std::array<word, 2 * N>& z, const std::array<word, N>& x, const std::array<word, N>& y) const {
-         clear_mem(z.data(), z.size());
+         clear_mem(z);
 
          if(m_words == 4) {
             bigint_comba_mul4(z.data(), x.data(), y.data());
@@ -209,7 +207,7 @@ class GenericCurveParams final {
       }
 
       void sqr(std::array<word, 2 * N>& z, const std::array<word, N>& x) const {
-         clear_mem(z.data(), z.size());
+         clear_mem(z);
 
          if(m_words == 4) {
             bigint_comba_sqr4(z.data(), x.data());
@@ -279,9 +277,10 @@ class GenericCurveParams final {
 class GenericScalar final {
    public:
       typedef word W;
+      typedef PrimeOrderCurve::StorageUnit StorageUnit;
       static constexpr size_t N = PrimeOrderCurve::StorageWords;
 
-      static std::optional<GenericScalar> from_wide_bytes(const GPOC& curve, std::span<const uint8_t> bytes) {
+      static std::optional<GenericScalar> from_wide_bytes(const GenericPrimeOrderCurve* curve, std::span<const uint8_t> bytes) {
          const size_t mlen = curve->_params().order_bytes();
 
          if(bytes.size() > 2 * mlen) {
@@ -300,7 +299,7 @@ class GenericScalar final {
          }
       }
 
-      static std::optional<GenericScalar> deserialize(const GPOC& curve, std::span<const uint8_t> bytes) {
+      static std::optional<GenericScalar> deserialize(const GenericPrimeOrderCurve* curve, std::span<const uint8_t> bytes) {
          const size_t len = curve->_params().order_bytes();
 
          if(bytes.size() != len) {
@@ -321,14 +320,14 @@ class GenericScalar final {
          }
       }
 
-      static GenericScalar zero(const GPOC& curve) {
-         std::array<W, N> zeros = {};
+      static GenericScalar zero(const GenericPrimeOrderCurve* curve) {
+         StorageUnit zeros = {};
          return GenericScalar(curve, zeros);
       }
 
-      static GenericScalar one(const GPOC& curve) { return GenericScalar(curve, curve->_params().order_monty_r1()); }
+      static GenericScalar one(const GenericPrimeOrderCurve* curve) { return GenericScalar(curve, curve->_params().order_monty_r1()); }
 
-      static GenericScalar random(const GPOC& curve, RandomNumberGenerator& rng) {
+      static GenericScalar random(const GenericPrimeOrderCurve* curve, RandomNumberGenerator& rng) {
          constexpr size_t MAX_ATTEMPTS = 1000;
 
          const size_t bits = curve->_params().order_bits();
@@ -359,10 +358,10 @@ class GenericScalar final {
          auto curve = check_curve(a, b);
          const size_t words = curve->_params().words();
 
-         std::array<W, N> t = {};
+         StorageUnit t = {};
          W carry = bigint_add3_nc(t.data(), a.data(), words, b.data(), words);
 
-         std::array<W, N> r = {};
+         StorageUnit r = {};
          bigint_monty_maybe_sub(words, r.data(), carry, t.data(), curve->_params().order().data());
          return GenericScalar(curve, r);
       }
@@ -394,7 +393,7 @@ class GenericScalar final {
          return GenericScalar(curve, redc(curve, z));
       }
 
-      GenericScalar pow_vartime(const std::array<W, N>& exp) const {
+      GenericScalar pow_vartime(const StorageUnit& exp) const {
          auto one = GenericScalar::one(curve());
          auto bits = curve()->_params().order_bits();
          auto words = curve()->_params().words();
@@ -404,7 +403,7 @@ class GenericScalar final {
       GenericScalar negate() const {
          auto x_is_zero = CT::all_zeros(this->data(), N);
 
-         std::array<W, N> r;
+         StorageUnit r;
          bigint_sub3(r.data(), m_curve->_params().order().data(), N, this->data(), N);
          x_is_zero.if_set_zero_out(r.data(), N);
          return GenericScalar(m_curve, r);
@@ -447,62 +446,63 @@ class GenericScalar final {
       /**
       * Convert the integer to standard representation and return the sequence of words
       */
-      std::array<W, N> to_words() const { return from_rep(m_curve, m_val); }
+      StorageUnit to_words() const { return from_rep(m_curve, m_val); }
 
-      std::array<W, N> stash_value() const { return m_val; }
+      const StorageUnit& stash_value() const { return m_val; }
 
-      const GPOC& curve() const { return m_curve; }
+      const GenericPrimeOrderCurve* curve() const { return m_curve; }
 
-      GenericScalar(GPOC curve, std::array<W, N> val) : m_curve(curve), m_val(val) {}
+      GenericScalar(const GenericPrimeOrderCurve* curve, StorageUnit val) : m_curve(curve), m_val(val) {}
 
    private:
-      const std::array<W, N>& value() const { return m_val; }
+      const StorageUnit& value() const { return m_val; }
 
       const W* data() const { return m_val.data(); }
 
-      static GPOC check_curve(const GenericScalar& a, const GenericScalar& b) {
+      static const GenericPrimeOrderCurve* check_curve(const GenericScalar& a, const GenericScalar& b) {
          BOTAN_STATE_CHECK(a.m_curve == b.m_curve);
          return a.m_curve;
       }
 
-      static std::array<W, N> redc(const GPOC& curve, std::array<W, 2 * N> z) {
+      static StorageUnit redc(const GenericPrimeOrderCurve* curve, std::array<W, 2 * N> z) {
          const auto& mod = curve->_params().order();
          const size_t words = curve->_params().words();
-         std::array<W, N> ws = {};
+         StorageUnit ws = {};
          bigint_monty_redc(z.data(), mod.data(), words, curve->_params().order_p_dash(), ws.data(), ws.size());
          copy_mem(ws, std::span{z}.first<N>());
          return ws;
       }
 
-      static std::array<W, N> from_rep(const GPOC& curve, std::array<W, N> z) {
+      static StorageUnit from_rep(const GenericPrimeOrderCurve* curve, StorageUnit z) {
          std::array<W, 2 * N> ze = {};
          copy_mem(std::span{ze}.template first<N>(), z);
          return redc(curve, ze);
       }
 
-      static std::array<W, N> to_rep(const GPOC& curve, std::array<W, N> x) {
+      static StorageUnit to_rep(const GenericPrimeOrderCurve* curve, StorageUnit x) {
          std::array<W, 2 * N> z;
          curve->_params().mul(z, x, curve->_params().order_monty_r2());
          return redc(curve, z);
       }
 
-      static std::array<W, N> wide_to_rep(const GPOC& curve, std::array<W, 2 * N> x) {
+      static StorageUnit wide_to_rep(const GenericPrimeOrderCurve* curve, std::array<W, 2 * N> x) {
          auto redc_x = redc(curve, x);
          std::array<W, 2 * N> z;
          curve->_params().mul(z, redc_x, curve->_params().order_monty_r3());
          return redc(curve, z);
       }
 
-      GPOC m_curve;
-      std::array<W, N> m_val;
+      const GenericPrimeOrderCurve* m_curve;
+      StorageUnit m_val;
 };
 
 class GenericField final {
    public:
       typedef word W;
+      typedef PrimeOrderCurve::StorageUnit StorageUnit;
       static constexpr size_t N = PrimeOrderCurve::StorageWords;
 
-      static std::optional<GenericField> deserialize(const GPOC& curve, std::span<const uint8_t> bytes) {
+      static std::optional<GenericField> deserialize(const GenericPrimeOrderCurve* curve, std::span<const uint8_t> bytes) {
          const size_t len = curve->_params().field_bytes();
 
          if(bytes.size() != len) {
@@ -523,22 +523,22 @@ class GenericField final {
          }
       }
 
-      static GenericField from_words(GPOC curve, const std::array<word, N>& words) {
+      static GenericField from_words(const GenericPrimeOrderCurve* curve, const std::array<word, N>& words) {
          return GenericField(curve, to_rep(curve, words));
       }
 
-      static GenericField zero(const GPOC& curve) {
-         std::array<W, N> zeros = {};
+      static GenericField zero(const GenericPrimeOrderCurve* curve) {
+         StorageUnit zeros = {};
          return GenericField(curve, zeros);
       }
 
-      static GenericField one(const GPOC& curve) { return GenericField(curve, curve->_params().field_monty_r1()); }
+      static GenericField one(const GenericPrimeOrderCurve* curve) { return GenericField(curve, curve->_params().field_monty_r1()); }
 
-      static GenericField curve_a(const GPOC& curve) { return GenericField(curve, curve->_params().monty_curve_a()); }
+      static GenericField curve_a(const GenericPrimeOrderCurve* curve) { return GenericField(curve, curve->_params().monty_curve_a()); }
 
-      static GenericField curve_b(const GPOC& curve) { return GenericField(curve, curve->_params().monty_curve_b()); }
+      static GenericField curve_b(const GenericPrimeOrderCurve* curve) { return GenericField(curve, curve->_params().monty_curve_b()); }
 
-      static GenericField random(const GPOC& curve, RandomNumberGenerator& rng) {
+      static GenericField random(const GenericPrimeOrderCurve* curve, RandomNumberGenerator& rng) {
          constexpr size_t MAX_ATTEMPTS = 1000;
 
          const size_t bits = curve->_params().field_bits();
@@ -569,7 +569,7 @@ class GenericField final {
       * Return the value of this divided by 2
       */
       GenericField div2() const {
-         std::array<W, N> t = value();
+         StorageUnit t = value();
          W borrow = shift_right<1>(t);
 
          // If value was odd, add (P/2)+1
@@ -580,10 +580,10 @@ class GenericField final {
 
       /// Return (*this) multiplied by 2
       GenericField mul2() const {
-         std::array<W, N> t = value();
+         StorageUnit t = value();
          W carry = shift_left<1>(t);
 
-         std::array<W, N> r;
+         StorageUnit r;
          bigint_monty_maybe_sub<N>(r.data(), carry, t.data(), m_curve->_params().field().data());
          return GenericField(m_curve, r);
       }
@@ -601,10 +601,10 @@ class GenericField final {
          auto curve = check_curve(a, b);
          const size_t words = curve->_params().words();
 
-         std::array<W, N> t = {};
+         StorageUnit t = {};
          W carry = bigint_add3_nc(t.data(), a.data(), words, b.data(), words);
 
-         std::array<W, N> r = {};
+         StorageUnit r = {};
          bigint_monty_maybe_sub(words, r.data(), carry, t.data(), curve->_params().field().data());
          return GenericField(curve, r);
       }
@@ -634,7 +634,7 @@ class GenericField final {
          return GenericField(m_curve, redc(m_curve, z));
       }
 
-      GenericField pow_vartime(const std::array<W, N>& exp) const {
+      GenericField pow_vartime(const StorageUnit& exp) const {
          auto one = GenericField::one(curve());
          auto bits = curve()->_params().field_bits();
          auto words = curve()->_params().words();
@@ -644,7 +644,7 @@ class GenericField final {
       GenericField negate() const {
          auto x_is_zero = CT::all_zeros(this->data(), N);
 
-         std::array<W, N> r;
+         StorageUnit r;
          bigint_sub3(r.data(), m_curve->_params().field().data(), N, this->data(), N);
          x_is_zero.if_set_zero_out(r.data(), N);
          return GenericField(m_curve, r);
@@ -677,9 +677,9 @@ class GenericField final {
          return CT::is_equal(m_val.data(), other.m_val.data(), m_curve->_params().words()).as_choice();
       }
 
-      std::array<W, N> stash_value() const { return m_val; }
+      const StorageUnit& stash_value() const { return m_val; }
 
-      const GPOC& curve() const { return m_curve; }
+      const GenericPrimeOrderCurve* curve() const { return m_curve; }
 
       CT::Choice is_even() const {
          auto v = from_rep(m_curve, m_val);
@@ -689,7 +689,7 @@ class GenericField final {
       /**
       * Convert the integer to standard representation and return the sequence of words
       */
-      std::array<W, N> to_words() const { return from_rep(m_curve, m_val); }
+      StorageUnit to_words() const { return from_rep(m_curve, m_val); }
 
       void _const_time_poison() const { CT::poison(m_val); }
 
@@ -749,41 +749,41 @@ class GenericField final {
          return {z, correct};
       }
 
-      GenericField(const GPOC& curve, std::array<W, N> val) : m_curve(curve), m_val(val) {}
+      GenericField(const GenericPrimeOrderCurve* curve, StorageUnit val) : m_curve(curve), m_val(val) {}
 
    private:
-      const std::array<W, N>& value() const { return m_val; }
+      const StorageUnit& value() const { return m_val; }
 
       const W* data() const { return m_val.data(); }
 
-      static GPOC check_curve(const GenericField& a, const GenericField& b) {
+      static const GenericPrimeOrderCurve* check_curve(const GenericField& a, const GenericField& b) {
          BOTAN_STATE_CHECK(a.m_curve == b.m_curve);
          return a.m_curve;
       }
 
-      static std::array<W, N> redc(const GPOC& curve, std::array<W, 2 * N> z) {
+      static StorageUnit redc(const GenericPrimeOrderCurve* curve, std::array<W, 2 * N> z) {
          const auto& mod = curve->_params().field();
          const size_t words = curve->_params().words();
-         std::array<W, N> ws = {};
+         StorageUnit ws = {};
          bigint_monty_redc(z.data(), mod.data(), words, curve->_params().field_p_dash(), ws.data(), ws.size());
          copy_mem(ws, std::span{z}.first<N>());
          return ws;
       }
 
-      static std::array<W, N> from_rep(const GPOC& curve, std::array<W, N> z) {
+      static StorageUnit from_rep(const GenericPrimeOrderCurve* curve, StorageUnit z) {
          std::array<W, 2 * N> ze = {};
          copy_mem(std::span{ze}.template first<N>(), z);
          return redc(curve, ze);
       }
 
-      static std::array<W, N> to_rep(const GPOC& curve, std::array<W, N> x) {
+      static StorageUnit to_rep(const GenericPrimeOrderCurve* curve, StorageUnit x) {
          std::array<W, 2 * N> z;
          curve->_params().mul(z, x, curve->_params().field_monty_r2());
          return redc(curve, z);
       }
 
-      GPOC m_curve;
-      std::array<W, N> m_val;
+      const GenericPrimeOrderCurve* m_curve;
+      StorageUnit m_val;
 };
 
 /**
@@ -795,9 +795,9 @@ class GenericAffinePoint final {
    public:
       GenericAffinePoint(const GenericField& x, const GenericField& y) : m_x(x), m_y(y) {}
 
-      GenericAffinePoint(const GPOC& curve) : m_x(GenericField::zero(curve)), m_y(GenericField::zero(curve)) {}
+      GenericAffinePoint(const GenericPrimeOrderCurve* curve) : m_x(GenericField::zero(curve)), m_y(GenericField::zero(curve)) {}
 
-      static GenericAffinePoint identity(const GPOC& curve) {
+      static GenericAffinePoint identity(const GenericPrimeOrderCurve* curve) {
          return GenericAffinePoint(GenericField::zero(curve), GenericField::zero(curve));
       }
 
@@ -876,7 +876,7 @@ class GenericAffinePoint final {
       * It also currently accepts the deprecated hybrid format.
       * TODO(Botan4): remove support for decoding hybrid points
       */
-      static std::optional<GenericAffinePoint> deserialize(const GPOC& curve, std::span<const uint8_t> bytes) {
+      static std::optional<GenericAffinePoint> deserialize(const GenericPrimeOrderCurve* curve, std::span<const uint8_t> bytes) {
          const size_t fe_bytes = curve->_params().field_bytes();
 
          if(bytes.size() == 1 + 2 * fe_bytes) {
@@ -944,7 +944,7 @@ class GenericAffinePoint final {
          GenericField::conditional_assign(m_x, m_y, cond, pt.x(), pt.y());
       }
 
-      const GPOC& curve() const { return m_x.curve(); }
+      const GenericPrimeOrderCurve* curve() const { return m_x.curve(); }
 
       void _const_time_poison() const { CT::poison_all(m_x, m_y); }
 
@@ -973,14 +973,14 @@ class GenericProjectivePoint final {
       /**
       * Return the identity element
       */
-      static Self identity(const GPOC& curve) {
+      static Self identity(const GenericPrimeOrderCurve* curve) {
          return Self(GenericField::zero(curve), GenericField::one(curve), GenericField::zero(curve));
       }
 
       /**
       * Default constructor: the identity element
       */
-      GenericProjectivePoint(const GPOC& curve) :
+      GenericProjectivePoint(const GenericPrimeOrderCurve* curve) :
             m_x(GenericField::zero(curve)), m_y(GenericField::one(curve)), m_z(GenericField::zero(curve)) {}
 
       /**
@@ -1333,7 +1333,7 @@ class GenericProjectivePoint final {
       */
       const GenericField& z() const { return m_z; }
 
-      const GPOC& curve() const { return m_x.curve(); }
+      const GenericPrimeOrderCurve* curve() const { return m_x.curve(); }
 
       void _const_time_poison() const { CT::poison_all(m_x, m_y, m_z); }
 
@@ -1551,6 +1551,11 @@ class GenericWindowedMul2 final : public PrimeOrderCurve::PrecomputedMul2Table {
       // 2^(2*W) elements, less the identity element
       static constexpr size_t TableSize = (1 << (2 * WindowBits)) - 1;
 
+      GenericWindowedMul2(const GenericWindowedMul2& other) = delete;
+      GenericWindowedMul2(GenericWindowedMul2&& other) = delete;
+      GenericWindowedMul2& operator=(const GenericWindowedMul2& other) = delete;
+      GenericWindowedMul2& operator=(GenericWindowedMul2&& other) = delete;
+
       GenericWindowedMul2(const GenericAffinePoint& x, const GenericAffinePoint& y) {
          std::vector<GenericProjectivePoint> table;
 
@@ -1602,7 +1607,7 @@ class GenericWindowedMul2 final : public PrimeOrderCurve::PrecomputedMul2Table {
          m_table = GenericProjectivePoint::to_affine_batch(table);
       }
 
-      GenericProjectivePoint mul2_vartime(const GenericScalar& x, const GenericScalar& y) {
+      GenericProjectivePoint mul2_vartime(const GenericScalar& x, const GenericScalar& y) const {
          const auto x_bits = x.serialize();
          const auto y_bits = y.serialize();
 
@@ -1696,7 +1701,7 @@ std::unique_ptr<const PrimeOrderCurve::PrecomputedMul2Table> GenericPrimeOrderCu
 std::optional<PrimeOrderCurve::ProjectivePoint> GenericPrimeOrderCurve::mul2_vartime(const PrecomputedMul2Table& tableb,
                                                                                      const Scalar& s1,
                                                                                      const Scalar& s2) const {
-   auto tbl = dynamic_cast<const GenericWindowedMul2&>(tableb);
+   const auto& tbl = dynamic_cast<const GenericWindowedMul2&>(tableb);
    auto pt = tbl.mul2_vartime(from_stash(s1), from_stash(s2));
    if(pt.is_identity().as_bool()) {
       return {};
@@ -1724,7 +1729,7 @@ bool GenericPrimeOrderCurve::mul2_vartime_x_mod_order_eq(const PrecomputedMul2Ta
                                                          const Scalar& v,
                                                          const Scalar& s1,
                                                          const Scalar& s2) const {
-   auto tbl = dynamic_cast<const GenericWindowedMul2&>(tableb);
+   const auto& tbl = dynamic_cast<const GenericWindowedMul2&>(tableb);
    auto pt = tbl.mul2_vartime(from_stash(s1), from_stash(s2));
 
    if(!pt.is_identity().as_bool()) {
@@ -1958,7 +1963,15 @@ std::shared_ptr<const PrimeOrderCurve> PCurveInstance::from_params(
    }
 
    auto gpoc = std::make_shared<GenericPrimeOrderCurve>(p, a, b, base_x, base_y, order);
-   // Kind of nasty but it works
+   /*
+   The implementation of this needs to call shared_from_this which is not usable
+   until after the constructor has completed, so we have to do a two-stage
+   construction process. This is certainly not so clean but it is contained to
+   this single file so seems tolerable.
+
+   Alternately we could lazily compute the base mul table but this brings in
+   locking issues which seem a worse alternative overall.
+   */
    gpoc->_precompute_base_mul();
    return gpoc;
 }
