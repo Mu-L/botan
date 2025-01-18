@@ -1569,7 +1569,7 @@ class GenericWindowedMul2 final : public PrimeOrderCurve::PrecomputedMul2Table {
       GenericWindowedMul2& operator=(const GenericWindowedMul2& other) = delete;
       GenericWindowedMul2& operator=(GenericWindowedMul2&& other) = delete;
 
-      ~GenericWindowedMul2() = default;
+      ~GenericWindowedMul2() override = default;
 
       GenericWindowedMul2(const GenericAffinePoint& x, const GenericAffinePoint& y) {
          std::vector<GenericProjectivePoint> table;
