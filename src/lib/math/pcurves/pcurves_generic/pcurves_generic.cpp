@@ -280,7 +280,8 @@ class GenericScalar final {
       typedef PrimeOrderCurve::StorageUnit StorageUnit;
       static constexpr size_t N = PrimeOrderCurve::StorageWords;
 
-      static std::optional<GenericScalar> from_wide_bytes(const GenericPrimeOrderCurve* curve, std::span<const uint8_t> bytes) {
+      static std::optional<GenericScalar> from_wide_bytes(const GenericPrimeOrderCurve* curve,
+                                                          std::span<const uint8_t> bytes) {
          const size_t mlen = curve->_params().order_bytes();
 
          if(bytes.size() > 2 * mlen) {
@@ -299,7 +300,8 @@ class GenericScalar final {
          }
       }
 
-      static std::optional<GenericScalar> deserialize(const GenericPrimeOrderCurve* curve, std::span<const uint8_t> bytes) {
+      static std::optional<GenericScalar> deserialize(const GenericPrimeOrderCurve* curve,
+                                                      std::span<const uint8_t> bytes) {
          const size_t len = curve->_params().order_bytes();
 
          if(bytes.size() != len) {
@@ -325,7 +327,9 @@ class GenericScalar final {
          return GenericScalar(curve, zeros);
       }
 
-      static GenericScalar one(const GenericPrimeOrderCurve* curve) { return GenericScalar(curve, curve->_params().order_monty_r1()); }
+      static GenericScalar one(const GenericPrimeOrderCurve* curve) {
+         return GenericScalar(curve, curve->_params().order_monty_r1());
+      }
 
       static GenericScalar random(const GenericPrimeOrderCurve* curve, RandomNumberGenerator& rng) {
          constexpr size_t MAX_ATTEMPTS = 1000;
@@ -502,7 +506,8 @@ class GenericField final {
       typedef PrimeOrderCurve::StorageUnit StorageUnit;
       static constexpr size_t N = PrimeOrderCurve::StorageWords;
 
-      static std::optional<GenericField> deserialize(const GenericPrimeOrderCurve* curve, std::span<const uint8_t> bytes) {
+      static std::optional<GenericField> deserialize(const GenericPrimeOrderCurve* curve,
+                                                     std::span<const uint8_t> bytes) {
          const size_t len = curve->_params().field_bytes();
 
          if(bytes.size() != len) {
@@ -532,11 +537,17 @@ class GenericField final {
          return GenericField(curve, zeros);
       }
 
-      static GenericField one(const GenericPrimeOrderCurve* curve) { return GenericField(curve, curve->_params().field_monty_r1()); }
+      static GenericField one(const GenericPrimeOrderCurve* curve) {
+         return GenericField(curve, curve->_params().field_monty_r1());
+      }
 
-      static GenericField curve_a(const GenericPrimeOrderCurve* curve) { return GenericField(curve, curve->_params().monty_curve_a()); }
+      static GenericField curve_a(const GenericPrimeOrderCurve* curve) {
+         return GenericField(curve, curve->_params().monty_curve_a());
+      }
 
-      static GenericField curve_b(const GenericPrimeOrderCurve* curve) { return GenericField(curve, curve->_params().monty_curve_b()); }
+      static GenericField curve_b(const GenericPrimeOrderCurve* curve) {
+         return GenericField(curve, curve->_params().monty_curve_b());
+      }
 
       static GenericField random(const GenericPrimeOrderCurve* curve, RandomNumberGenerator& rng) {
          constexpr size_t MAX_ATTEMPTS = 1000;
@@ -795,7 +806,8 @@ class GenericAffinePoint final {
    public:
       GenericAffinePoint(const GenericField& x, const GenericField& y) : m_x(x), m_y(y) {}
 
-      GenericAffinePoint(const GenericPrimeOrderCurve* curve) : m_x(GenericField::zero(curve)), m_y(GenericField::zero(curve)) {}
+      GenericAffinePoint(const GenericPrimeOrderCurve* curve) :
+            m_x(GenericField::zero(curve)), m_y(GenericField::zero(curve)) {}
 
       static GenericAffinePoint identity(const GenericPrimeOrderCurve* curve) {
          return GenericAffinePoint(GenericField::zero(curve), GenericField::zero(curve));
@@ -876,7 +888,8 @@ class GenericAffinePoint final {
       * It also currently accepts the deprecated hybrid format.
       * TODO(Botan4): remove support for decoding hybrid points
       */
-      static std::optional<GenericAffinePoint> deserialize(const GenericPrimeOrderCurve* curve, std::span<const uint8_t> bytes) {
+      static std::optional<GenericAffinePoint> deserialize(const GenericPrimeOrderCurve* curve,
+                                                           std::span<const uint8_t> bytes) {
          const size_t fe_bytes = curve->_params().field_bytes();
 
          if(bytes.size() == 1 + 2 * fe_bytes) {
@@ -1555,6 +1568,8 @@ class GenericWindowedMul2 final : public PrimeOrderCurve::PrecomputedMul2Table {
       GenericWindowedMul2(GenericWindowedMul2&& other) = delete;
       GenericWindowedMul2& operator=(const GenericWindowedMul2& other) = delete;
       GenericWindowedMul2& operator=(GenericWindowedMul2&& other) = delete;
+
+      ~GenericWindowedMul2() = default;
 
       GenericWindowedMul2(const GenericAffinePoint& x, const GenericAffinePoint& y) {
          std::vector<GenericProjectivePoint> table;
